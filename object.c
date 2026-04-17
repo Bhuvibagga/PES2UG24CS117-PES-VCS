@@ -111,7 +111,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     header[header_len] = '\0';
     header_len += 1;
 
-    // Build full object = header + data
+    // Full object
     size_t full_len = (size_t)header_len + len;
     uint8_t *full_obj = malloc(full_len);
     if (!full_obj) return -1;
@@ -120,21 +120,68 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     if (len > 0)
         memcpy(full_obj + header_len, data, len);
 
-    // Compute hash
+    // Hash
     compute_hash(full_obj, full_len, id_out);
 
-    // Deduplication check
+    // Dedup
     if (object_exists(id_out)) {
         free(full_obj);
         return 0;
     }
 
-    // Stop here for this commit
+    // Get path
+    char final_path[512];
+    object_path(id_out, final_path, sizeof(final_path));
+
+    // Create directory
+    char dir_path[512];
+    snprintf(dir_path, sizeof(dir_path), "%s", final_path);
+
+    char *slash = strrchr(dir_path, '/');
+    if (!slash) {
+        free(full_obj);
+        return -1;
+    }
+    *slash = '\0';
+
+    mkdir(dir_path, 0755);
+
+    // Temp file
+    char tmp_path[560];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%ld", final_path, (long)getpid());
+
+    int fd = open(tmp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        free(full_obj);
+        return -1;
+    }
+
+    // Write loop
+    ssize_t written = 0;
+    while (written < (ssize_t)full_len) {
+        ssize_t w = write(fd, full_obj + written, full_len - written);
+        if (w <= 0) {
+            close(fd);
+            unlink(tmp_path);
+            free(full_obj);
+            return -1;
+        }
+        written += w;
+    }
+
+    fsync(fd);
+    close(fd);
+
+    // Atomic rename
+    if (rename(tmp_path, final_path) != 0) {
+        unlink(tmp_path);
+        free(full_obj);
+        return -1;
+    }
+
     free(full_obj);
-    return -1;
+    return 0;
 }
-// Read an object from the store.
-//
 // Steps:
 //   1. Build the file path from the hash using object_path()
 //   2. Open and read the entire file
