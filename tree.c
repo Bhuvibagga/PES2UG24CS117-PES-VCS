@@ -90,6 +90,22 @@ static int build_tree(Index *index, const char *prefix, ObjectID *out_id) {
     free(data);
     return 0;
 }
+
 int tree_from_index(ObjectID *id_out) {
+    Index index;
+
+    if (index_load(&index) != 0)
+        return -1;
+
+    Tree tree = {0};
+
+    for (int i = 0; i < index.count; i++) {
+        TreeEntry *te = &tree.entries[tree.count++];
+
+        te->mode = index.entries[i].mode;
+        strcpy(te->name, index.entries[i].path);
+        te->hash = index.entries[i].hash;
+    }
+
     return -1;
 }
