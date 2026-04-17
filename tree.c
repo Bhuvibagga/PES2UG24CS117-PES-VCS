@@ -13,10 +13,12 @@ typedef struct {
 // Recursive function to build tree
 static int build_tree(Index *index, const char *prefix, ObjectID *out_id) {
     Tree tree = {0};
-    TempEntry temp[MAX_TREE_ENTRIES];
-    int temp_count = 0;
 
     size_t prefix_len = strlen(prefix);
+
+    // Track directories
+    char seen_dirs[MAX_TREE_ENTRIES][256];
+    int dir_count = 0;
 
     for (int i = 0; i < index->count; i++) {
         IndexEntry *entry = &index->entries[i];
@@ -38,32 +40,30 @@ static int build_tree(Index *index, const char *prefix, ObjectID *out_id) {
             te->hash = entry->hash;
         } else {
             // DIRECTORY
-            size_t dir_len = slash - remaining;
+            size_t len = slash - remaining;
 
             char dirname[256];
-            strncpy(dirname, remaining, dir_len);
-            dirname[dir_len] = '\0';
+            strncpy(dirname, remaining, len);
+            dirname[len] = '\0';
 
-            int found = 0;
-            for (int j = 0; j < temp_count; j++) {
-                if (strcmp(temp[j].name, dirname) == 0) {
-                    found = 1;
+            int exists = 0;
+            for (int j = 0; j < dir_count; j++) {
+                if (strcmp(seen_dirs[j], dirname) == 0) {
+                    exists = 1;
                     break;
                 }
             }
 
-            if (!found) {
-                strcpy(temp[temp_count].name, dirname);
-                temp[temp_count].is_dir = 1;
-                temp_count++;
+            if (!exists) {
+                strcpy(seen_dirs[dir_count++], dirname);
             }
         }
     }
 
-    // Process directories recursively
-    for (int i = 0; i < temp_count; i++) {
+    // Recursively build subtrees
+    for (int i = 0; i < dir_count; i++) {
         char new_prefix[512];
-        snprintf(new_prefix, sizeof(new_prefix), "%s%s/", prefix, temp[i].name);
+        snprintf(new_prefix, sizeof(new_prefix), "%s%s/", prefix, seen_dirs[i]);
 
         ObjectID sub_id;
         if (build_tree(index, new_prefix, &sub_id) != 0)
@@ -71,11 +71,11 @@ static int build_tree(Index *index, const char *prefix, ObjectID *out_id) {
 
         TreeEntry *te = &tree.entries[tree.count++];
         te->mode = MODE_DIR;
-        strcpy(te->name, temp[i].name);
+        strcpy(te->name, seen_dirs[i]);
         te->hash = sub_id;
     }
 
-    // Serialize + write
+    // Serialize and write tree
     void *data;
     size_t len;
 
@@ -90,7 +90,6 @@ static int build_tree(Index *index, const char *prefix, ObjectID *out_id) {
     free(data);
     return 0;
 }
-
 int tree_from_index(ObjectID *id_out) {
     Index index;
 
@@ -120,4 +119,12 @@ int tree_from_index(ObjectID *id_out) {
 
     free(data);
     return 0;
+}
+int tree_from_index(ObjectID *id_out) {
+    Index index;
+
+    if (index_load(&index) != 0)
+        return -1;
+
+    return build_tree(&index, "", id_out);
 }
