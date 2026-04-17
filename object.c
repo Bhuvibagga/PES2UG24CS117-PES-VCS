@@ -101,7 +101,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     else if (type == OBJ_COMMIT) type_str = "commit";
     else return -1;
 
-    // Build header: "<type> <size>\0"
+    // Build header
     char header[64];
     int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
 
@@ -111,7 +111,27 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     header[header_len] = '\0';
     header_len += 1;
 
-    return -1; // rest not implemented yet
+    // Build full object = header + data
+    size_t full_len = (size_t)header_len + len;
+    uint8_t *full_obj = malloc(full_len);
+    if (!full_obj) return -1;
+
+    memcpy(full_obj, header, (size_t)header_len);
+    if (len > 0)
+        memcpy(full_obj + header_len, data, len);
+
+    // Compute hash
+    compute_hash(full_obj, full_len, id_out);
+
+    // Deduplication check
+    if (object_exists(id_out)) {
+        free(full_obj);
+        return 0;
+    }
+
+    // Stop here for this commit
+    free(full_obj);
+    return -1;
 }
 // Read an object from the store.
 //
