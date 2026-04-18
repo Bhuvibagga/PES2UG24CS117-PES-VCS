@@ -135,9 +135,31 @@ int index_status(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_load(Index *index) {
-    return -1;
-}
+    index->count = 0;
 
+    FILE *f = fopen(".pes/index", "r");
+    if (!f) return 0; // empty index is OK
+
+    while (!feof(f)) {
+        IndexEntry *e = &index->entries[index->count];
+
+        char hash_hex[HASH_HEX_SIZE + 1];
+
+        if (fscanf(f, "%o %s %ld %ld %s",
+                   &e->mode,
+                   hash_hex,
+                   &e->mtime,
+                   &e->size,
+                   e->path) != 5)
+            break;
+
+        hex_to_hash(hash_hex, &e->hash);
+        index->count++;
+    }
+
+    fclose(f);
+    return 0;
+}
 int index_save(const Index *index) {
     return -1;
 }
