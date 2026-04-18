@@ -160,9 +160,18 @@ int index_load(Index *index) {
     fclose(f);
     return 0;
 }
+static int compare_index(const void *a, const void *b) {
+    return strcmp(((IndexEntry *)a)->path,
+                  ((IndexEntry *)b)->path);
+}
+
 int index_save(const Index *index) {
     FILE *f = fopen(".pes/index", "w");
     if (!f) return -1;
+
+    
+    qsort((void *)index->entries, index->count,
+          sizeof(IndexEntry), compare_index);
 
     for (int i = 0; i < index->count; i++) {
         char hash_hex[HASH_HEX_SIZE + 1];
