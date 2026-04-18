@@ -205,7 +205,31 @@ int commit_create(const char *message) {
     // 2. Read parent commit (if exists)
     ObjectID parent_id;
     int has_parent = (head_read(&parent_id) == 0);
+        // 3. Convert hashes to hex
+    char tree_hex[HASH_HEX_SIZE + 1];
+    char parent_hex[HASH_HEX_SIZE + 1];
 
+    hash_to_hex(&tree_id, tree_hex);
+
+    if (has_parent)
+        hash_to_hex(&parent_id, parent_hex);
+
+    // 4. Author + time
+    const char *author = pes_author();
+    time_t now = time(NULL);
+
+    // 5. Build commit content
+    char buffer[2048];
+
+    if (has_parent) {
+        snprintf(buffer, sizeof(buffer),
+            "tree %s\nparent %s\nauthor %s %ld\ncommitter %s %ld\n\n%s\n",
+            tree_hex, parent_hex, author, now, author, now, message);
+    } else {
+        snprintf(buffer, sizeof(buffer),
+            "tree %s\nauthor %s %ld\ncommitter %s %ld\n\n%s\n",
+            tree_hex, author, now, author, now, message);
+    }
     
 
     return 0;
