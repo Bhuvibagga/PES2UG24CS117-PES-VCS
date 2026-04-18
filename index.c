@@ -161,9 +161,24 @@ int index_load(Index *index) {
     return 0;
 }
 int index_save(const Index *index) {
-    return -1;
-}
+    FILE *f = fopen(".pes/index", "w");
+    if (!f) return -1;
 
+    for (int i = 0; i < index->count; i++) {
+        char hash_hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&index->entries[i].hash, hash_hex);
+
+        fprintf(f, "%o %s %ld %ld %s\n",
+                index->entries[i].mode,
+                hash_hex,
+                index->entries[i].mtime,
+                index->entries[i].size,
+                index->entries[i].path);
+    }
+
+    fclose(f);
+    return 0;
+}
 int index_add(Index *index, const char *path) {
     return -1;
 }
